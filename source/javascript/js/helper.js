@@ -25,6 +25,7 @@ var CLOCK_TIMER_INTERVAL = 1000;      // Frequency that the countdown should be 
 var ACTION_TIMER_INTERVAL = 60000;    // Frequency that a new action should be taken, in ms
 var DONOR_TIMER_INTERVAL = 60000;     // Length of time a new donation is shown, in ms
 var LOGO_PLAY_MARK = 60;              // Number of times the action item ticks before showing logos
+var THANK_YOU_PLAY_MARK = 5;          // Number of times the action item ticks before showing THANK YOUS
 
 var DONOR_AMOUNT_POINT_Y = 40;
 var DONOR_AMOUNT_FONT_SIZE = 36;
@@ -34,6 +35,19 @@ var DONOR_AMOUNT_POINT_Y_ALT = 52;
 var DONOR_AMOUNT_FONT_SIZE_ALT = 40;
 var DONOR_NAME_POINT_Y_ALT = 76;
 var DONOR_NAME_FONT_SIZE_ALT = 14;
+
+var THANK_YOU_POINT_Y = 20;
+var THANK_YOU_FONT_SIZE = 12;
+var THANK_YOU_NAME_POINT_Y = 56;
+var THANK_YOU_AMOUNT_POINT_Y = 76;
+var THANK_YOU_AMOUNT_FONT_SIZE = 12;
+var THANK_YOU_COMPLIMENTS_POINT_Y = 98;
+var THANK_YOU_AMOUNT_FONT_SIZE = 16;
+var THANK_YOU_FADE_IN_TIME = 1500;
+var THANK_YOU_DISPLAY_TIME = 5000;
+var THANK_YOU_FADE_OUT_TIME = 1000;
+var THANK_YOU_COMPLIMENTS = ["You rock!", "Unbelieveable!", "You're awesome!", "You're the best!", "Outstanding!"];
+var THANK_YOU_LIMIT = 10;
 
 var TEXT_DAYS_UNTIL = "DAYS UNTIL EXTRA LIFE:";
 var TEXT_HOURS_UNTIL = "HOURS UNTIL EXTRA LIFE:";
@@ -70,7 +84,15 @@ var infoGroup;
 var donorAmountText;
 var donorNameText;
 var donorMessageText;
-var donorGroup
+var donorGroup;
+var thankYouText;
+var thankYouAmount;
+var thankYouName;
+var thankYouGroup;
+var thankYouCounter;
+var thankYouIndex;
+var continueThankYous;
+var participantName;
 var clockGroup;
 var logoGroup;
 var logoYearGroup;
@@ -117,12 +139,18 @@ function init()
     newDonors = [];
     lastRaised = 0;
     logoCounter = 0;
+    thankYouCounter = 0;
+    thankYouIndex = 0;
+    continueThankYous = true;
     yearMode = yearMode == "true" ? true : false;
 
     initSound();
     initPage();
     initPaper();
     initScreen();
+
+    // Initialize the donor info, to retrieve list of existing donors
+    requestDonorInfo();
 
     if (IS_DEBUG)
     {
@@ -455,6 +483,47 @@ function initScreen()
     donorGroup.addChild(donorMessageText2);
     donorGroup.visible = false;
 
+    // Setup a group for thank yous
+    thankYouText = new paper.PointText({
+        point: [centerX, THANK_YOU_POINT_Y],
+        content: 'THANK YOU TO',
+        fontFamily: "Furore",
+        fontSize: THANK_YOU_FONT_SIZE,
+        justification: 'center'
+    });
+
+    thankYouName = new paper.PointText({
+        point: [centerX, THANK_YOU_NAME_POINT_Y],
+        content: '$0',
+        fontFamily: "Furore",
+        justification: 'center',
+        opacity: 0
+    });
+
+    thankYouAmount = new paper.PointText({
+        point: [centerX, THANK_YOU_AMOUNT_POINT_Y],
+        content: '$0',
+        fontFamily: "Furore",
+        fontSize: THANK_YOU_FONT_SIZE,
+        justification: 'center',
+        opacity: 0
+    });
+
+    thankYouCompliments = new paper.PointText({
+        point: [centerX, THANK_YOU_COMPLIMENTS_POINT_Y],
+        fontFamily: "Furore",
+        fontSize: THANK_YOU_AMOUNT_FONT_SIZE,
+        justification: 'center',
+        opacity: 0
+    });
+
+    thankYouGroup = new paper.Group();
+    thankYouGroup.addChild(thankYouText);
+    thankYouGroup.addChild(thankYouName);
+    thankYouGroup.addChild(thankYouAmount);
+    thankYouGroup.addChild(thankYouCompliments);
+    thankYouGroup.visible = false;
+
     // Setup the animating logos.
 
     paper.project.importSVG(extraLifeLogo, function(item) {        
@@ -478,6 +547,7 @@ function initScreen()
 
     setScale(infoGroup, helperScale);
     setScale(donorGroup, helperScale);
+    setScale(thankYouGroup, helperScale);
     setScale(logoGroup, helperScale, "topLeft");
     setScale(logoYearGroup, helperScale, "topLeft");
 
@@ -497,6 +567,10 @@ function initScreen()
             donorNameText.fillColor = WHITE;
             donorMessageText1.fillColor = WHITE;
             donorMessageText2.fillColor = WHITE;
+            thankYouText.fillColor = WHITE;
+            thankYouName.fillColor = GREEN;
+            thankYouAmount.fillColor = WHITE;
+            thankYouCompliments.fillColor = GREEN;
             logoGroup.fillColor = WHITE;
             logoYearGroup.fillColor = WHITE;
             break;
@@ -512,6 +586,10 @@ function initScreen()
             donorNameText.fillColor = DARK_BLUE;
             donorMessageText1.fillColor = DARK_BLUE;            
             donorMessageText2.fillColor = DARK_BLUE;    
+            thankYouText.fillColor = DARK_BLUE;
+            thankYouName.fillColor = WHITE;
+            thankYouAmount.fillColor = DARK_BLUE;
+            thankYouCompliments.fillColor = WHITE;
             logoGroup.fillColor = WHITE;
             logoYearGroup.fillColor = WHITE;
             break;
@@ -527,6 +605,10 @@ function initScreen()
             donorNameText.fillColor = DARK_BLUE;
             donorMessageText1.fillColor = DARK_BLUE;            
             donorMessageText2.fillColor = DARK_BLUE;
+            thankYouText.fillColor = DARK_BLUE;
+            thankYouName.fillColor = WHITE;
+            thankYouAmount.fillColor = DARK_BLUE;
+            thankYouCompliments.fillColor = WHITE;
             logoGroup.fillColor = WHITE;
             logoYearGroup.fillColor = WHITE;
             break;
@@ -542,6 +624,10 @@ function initScreen()
             donorNameText.fillColor = DARK_BLUE;
             donorMessageText1.fillColor = DARK_BLUE;            
             donorMessageText2.fillColor = DARK_BLUE;    
+            thankYouText.fillColor = DARK_BLUE;
+            thankYouName.fillColor = LIGHT_BLUE;
+            thankYouAmount.fillColor = DARK_BLUE;
+            thankYouCompliments.fillColor = LIGHT_BLUE;
             break;
     }
 }
@@ -615,6 +701,15 @@ function onActionTimer()
          return;
     }
    
+    // Check if it's time to start rolling thank yous
+    thankYouCounter++;
+    if (thankYouCounter >= THANK_YOU_PLAY_MARK && enableThankYouMode)
+    {
+        thankYouCounter = 0;
+        showThankYous();
+        return;
+    }
+
     // Then check to see if we should be showing the logo animations.
     logoCounter++;
     if (logoCounter >= LOGO_PLAY_MARK)
@@ -627,11 +722,129 @@ function onActionTimer()
     infoGroup.visible = true;
     logoYearGroup.visible = true;
     donorGroup.visible = false;
+    thankYouGroup.visible = false;
     logoGroup.visible = false;
     
     // Otherwise, poll general info for player or team to see if total
     // amount raised has changed.
     requestGeneralInfo();        
+}
+
+function showThankYous()
+{
+    shownDonors.push({displayName: "John Doe"});
+    if (typeof shownDonors == 'undefined' || shownDonors.length == 0)
+    {
+        // There aren't any donors yet :(
+        return;
+    }
+
+    stopTimer("action");
+    stopTimer("clock");
+
+    infoGroup.visible = false;
+    logoYearGroup.visible = false;
+    donorGroup.visible = false;
+    logoGroup.visible = false;
+    thankYouGroup.visible = true;
+
+    // Custom loop function so that we can loop through the array on a delay timer, and give the animation of the name display time to show
+    function myLoopWithDelay()
+    {
+        if( thankYouIndex >= shownDonors.length )
+        {
+            thankYouIndex = 0;
+        }
+
+        // continueThankYous is used to pick up where we left off if we previously hit the THANK_YOU_LIMIT
+        if( continueThankYous || thankYouIndex % THANK_YOU_LIMIT != 0)
+        {
+            continueThankYous = false;
+            if( shownDonors[thankYouIndex].displayName == "undefinded" || shownDonors[thankYouIndex].displayName == null // gaurd clause, maybe not needed?
+            	|| shownDonors[thankYouIndex].displayName == "Anonymous"       // skip anonymous
+                || shownDonors[thankYouIndex].displayName == participantName ) // skip thanking yourself :)
+            {
+                thankYouIndex++;
+                myLoopWithDelay();
+            }
+            else
+            {
+                displayThankYou(shownDonors[thankYouIndex].displayName, shownDonors[thankYouIndex].amount)
+                thankYouIndex++;
+                setTimeout(myLoopWithDelay, THANK_YOU_FADE_IN_TIME + THANK_YOU_DISPLAY_TIME + THANK_YOU_FADE_OUT_TIME + 300);
+            }
+        }
+        else
+        {
+            startTimer("action");
+            startTimer("clock");
+            continueThankYous = true;
+        }
+    }
+    myLoopWithDelay();
+}
+
+function displayThankYou(donorName, amount)
+{
+    // Reset scaling first before making changes. There is a better
+    // way of doing this but this works for now.
+    //setScale(infoGroup, 1 / helperScale);
+    setScale(thankYouGroup, 1 / helperScale);
+
+    // brute force scaling of donorName.  There's probably a more elegant way of doing this. But, zzz.
+    switch (true)
+    {
+        case (donorName.length <= 11):
+            thankYouName.fontSize = 36;
+            break;
+        case (donorName.length <= 13):
+            thankYouName.fontSize = 30;
+            break;
+        case (donorName.length <= 15):
+            thankYouName.fontSize = 26;
+            break;
+        case (donorName.length <= 17):
+            thankYouName.fontSize = 22;
+            break;
+        case (donorName.length <= 19):
+            thankYouName.fontSize = 18;
+            break;
+        case (donorName.length <= 21):
+            thankYouName.fontSize = 14;
+            break;
+        default:
+            thankYouName.fontSize = 12;
+            break;
+    }
+
+    // Re-apply scaling after making changes to text size and positions.
+    //setScale(infoGroup, helperScale);
+    setScale(thankYouGroup, helperScale);
+
+    thankYouName.content = donorName;
+
+    thankYouAmount.content = amount == null
+        ? "for the donation!"
+        : "for the " + formatMoney(amount, true) + " donation!";
+
+    var randomIndex = Math.floor(Math.random() * THANK_YOU_COMPLIMENTS.length);
+    thankYouCompliments.content = THANK_YOU_COMPLIMENTS[randomIndex];
+
+    createjs.Tween.get(thankYouName)
+        .wait(200)
+        .to({opacity:1}, THANK_YOU_FADE_IN_TIME)
+        .wait(THANK_YOU_DISPLAY_TIME)
+        .to({opacity:0}, THANK_YOU_FADE_OUT_TIME);
+    createjs.Tween.get(thankYouAmount)
+        .wait(200)
+        .to({opacity:1}, THANK_YOU_FADE_IN_TIME)
+        .wait(THANK_YOU_DISPLAY_TIME)
+        .to({opacity:0}, THANK_YOU_FADE_OUT_TIME);
+    createjs.Tween.get(thankYouCompliments)
+        .wait(200)
+        .to({opacity:1}, THANK_YOU_FADE_IN_TIME)
+        .wait(THANK_YOU_DISPLAY_TIME)
+        .to({opacity:0}, THANK_YOU_FADE_OUT_TIME);
 }
 
 function animateLogos()
@@ -642,6 +855,7 @@ function animateLogos()
     infoGroup.visible = false;
     logoYearGroup.visible = false;
     donorGroup.visible = false;
+    thankYouGroup.visible = false;
     logoGroup.visible = true;
     
     createjs.Tween.get(extraLifeLogoItem)
@@ -700,7 +914,7 @@ function showNewDonor(donorName, donorAmount, donorMessage, donorAvatar, donorCr
     startTimer("donor");
 
     donorAmountText.content = donorAmount == null
-         ? A_GIFT
+         ? TEXT_A_GFIT
          : formatMoney(donorAmount, true);
     donorNameText.content = donorName == null
          ? TEXT_ANONYMOUS
@@ -712,6 +926,7 @@ function showNewDonor(donorName, donorAmount, donorMessage, donorAvatar, donorCr
     logoYearGroup.visible = false;
     donorGroup.visible = true;
     logoGroup.visible = false;
+    thankYouGroup.visible = false;
 
     playSounds();
 
@@ -719,7 +934,7 @@ function showNewDonor(donorName, donorAmount, donorMessage, donorAvatar, donorCr
     {
         setTimeout(function() {
             speakText(donorMessage);
-        }, 5000);
+        }, voiceWait );
 
     }
 
@@ -841,6 +1056,7 @@ function onGeneralInfoSuccess(res)
     log(res);
     var raised = res[KEY_SUM_DONATIONS];
     var goal = res[KEY_FUNDRAISING_GOAL];
+    participantName = res[KEY_DISPLAY_NAME];
 
     moneyText.content = formatMoney(raised, false);
 
